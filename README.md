@@ -76,9 +76,9 @@ This tab is used to analyze a standard flow cytometry .fcs or .csv file to deter
 ![refine_tab](https://github.com/jameswilsenach/FlowFI/blob/main/refine.png?raw=true)
 
 ### How to Use:
--Enter the data file path manually or click Browse to select a file.
--Use the checkboxes at the top to include or exclude broad categories of features from the analysis.
--Click Execute to start the analysis. The process involves bootstrapping and may take some time, with progress shown in the progress bar.
+-Enter the data file path manually or click Browse to select a file.  
+-Use the checkboxes at the top to include or exclude broad categories of features from the analysis.  
+-Click Execute to start the analysis. The process involves bootstrapping and may take some time, with progress shown in the progress bar.  
 -Results will be displayed in the main panel, ranked by importance by default.
 
 
