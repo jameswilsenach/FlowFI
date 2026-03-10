@@ -85,26 +85,41 @@ This tab is used to analyze a standard flow cytometry .fcs or .csv file to deter
 
 ### Interpreting the Results:
 **Feature Name:** The name of the channel from the source file.
+
 **Importance Bar:** The length of the colored bar indicates the relative importance of the feature. Longer bars are more important. The bar can also display confidence intervals (see menu options).
+
 **Sorting:** Use the dropdown menu to sort features by different criteria:
+
 **Importance** (Default): Ranks features by their Laplacian Score.
+
 **Type**: Groups features by their category (e.g., UV, V, B).
+
 **Cluster**: Groups features that are algorithmically determined to be similar (the colored border indicates cluster membership).
+
 **Centrality**: Ranks features by how representative they are of their assigned cluster. Central features are underlined.
+
 **Change from Previous**: Compares the current run's rankings to a previously loaded CSV file.
 
 ### Saving and Loading Refinement Outputs for Comparison/Analysis
 **Save Output as CSV**: Saves the full results table, including raw scores, cluster memberships, and confidence intervals, to a CSV file.
+
 **Load Output CSV for Comparison**: Loads a previously saved run to enable the "Sort by: Change from Previous" option.
+
 **Calculate Importance CIs**: Toggles the calculation and display of confidence intervals on the importance bars, providing a measure of estimate stability.
 
 FlowFI saves the analysis output in a CSV file with the following columns:
 **feature**: Name of the corresponding feature in the original file.
+
 **ri**: Relative Importance (normalized Laplacian Score from 0 to 1).
+
 **ls**: Raw Laplacian Score.
+
 **membership**: Numerical ID of the cluster this feature belongs to.
+
 **centrality**: Score from 0-1 indicating how representative the feature is of its cluster.
+
 **LowCI / UpperCI**: The lower and upper confidence interval bounds for the Relative Importance (if calculated).
+
 **comparison**: The change in rank compared to a loaded reference file (if used).
 
 ## References
