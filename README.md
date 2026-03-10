@@ -43,7 +43,7 @@ This tab is a workbench for creating new, quantifiable features from multi-chann
 
 ![design_tab](https://github.com/jameswilsenach/FlowFI/blob/main/design.png?raw=true)
 
-###Basic Workflow:
+### Basic Workflow:
 - Use the file tree on the left to navigate to and double-click a .tiff file to load it.
 - The original image for the selected channel appears in the top-left panel. The top-right panel shows the result of the image processing pipeline.
 - Use the menus (Preprocessing, Quantify) to build an analysis pipeline. Preprocessing operations are applied sequentially with the currently selected quantify option as the final operation that will produce a numerical value.
