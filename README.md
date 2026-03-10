@@ -93,7 +93,7 @@ This tab is used to analyze a standard flow cytometry .fcs or .csv file to deter
 **Centrality**: Ranks features by how representative they are of their assigned cluster. Central features are underlined.
 **Change from Previous**: Compares the current run's rankings to a previously loaded CSV file.
 
-###Saving and Loading Refinement Outputs for Comparison/Analysis
+### Saving and Loading Refinement Outputs for Comparison/Analysis
 **Save Output as CSV**: Saves the full results table, including raw scores, cluster memberships, and confidence intervals, to a CSV file.
 **Load Output CSV for Comparison**: Loads a previously saved run to enable the "Sort by: Change from Previous" option.
 **Calculate Importance CIs**: Toggles the calculation and display of confidence intervals on the importance bars, providing a measure of estimate stability.
@@ -109,9 +109,15 @@ FlowFI saves the analysis output in a CSV file with the following columns:
 
 ## References
 [1] He, X., Cai, D., & Niyogi, P. (2005). Laplacian score for feature selection. Advances in neural information processing systems, 18.
+
 [2] Traag, V. A., Waltman, L., & Van Eck, N. J. (2019). From Louvain to Leiden: guaranteeing well-connected communities. Scientific reports, 9(1), 5233.
+
 [3] Monti, S., Tamayo, P., Mesirov, J., & Golub, T. (2003). Consensus Clustering: A Resampling-Based Method for Class Discovery and Visualization of Gene Expression Microarray Data. Machine Learning, 52, 91–118.
+
 [4] Kaufman, L., & Rousseeuw, P. J. (1990). Partitioning around medoids (Program PAM). In Finding Groups in Data: An Introduction to Cluster Analysis. John Wiley & Sons.
+
 [5] Kendall, M. G. (1938). A New Measure of Rank Correlation. Biometrika, 30(1/2), 81–93.
+
 [6] Vinh, N. X., Epps, J., & Bailey, J. (2010). Information Theoretic Measures for Clusterings Comparison: Variants, Properties, Normalization and Correction for Chance. Journal of Machine Learning Research, 11, 2837–2854.
+
 [7] Lange, T., Roth, V., Braun, M. L., & Buhmann, J. M. (2004). Stability-based validation of clustering solutions. Neural Computation, 16(6), 1299-1323.
