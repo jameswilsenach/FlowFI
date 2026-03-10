@@ -51,12 +51,12 @@ This tab is a workbench for creating new, quantifiable features from multi-chann
 - Once a pipeline is defined, use the Parameters menu to apply it to a whole folder of images and export the results to a standard format (.fcs/.csv).
 
 
-###Single-Channel Quantification Options:
+### Single-Channel Quantification Options:
 -**Count**: Counts unique non-zero labels (for counting objects).
 -**Area**: Counts the number of non-zero pixels.
 -**Solidity**: Measures object compactness.
 
-###Multi-Channel Quantification Options:
+### Multi-Channel Quantification Options:
 -**Colocalisation**: Fraction of a 'Signal' channel's intensity within a 'Mask' channel.
 -**Containment**: Fraction of a 'Signal' inside the core of a 'Container' (excluding its shell).
 -**Relative Skewness**: Radial skewness of a 'Signal' relative to a 'Reference' centroid.
@@ -75,7 +75,7 @@ This tab is used to analyze a standard flow cytometry .fcs or .csv file to deter
 
 ![refine_tab](https://github.com/jameswilsenach/FlowFI/blob/main/refine.png?raw=true)
 
-###How to Use:
+### How to Use:
 -Enter the data file path manually or click Browse to select a file.
 -Use the checkboxes at the top to include or exclude broad categories of features from the analysis.
 -Click Execute to start the analysis. The process involves bootstrapping and may take some time, with progress shown in the progress bar.
@@ -83,7 +83,7 @@ This tab is used to analyze a standard flow cytometry .fcs or .csv file to deter
 
 
 
-###Interpreting the Results:
+### Interpreting the Results:
 **Feature Name:** The name of the channel from the source file.
 **Importance Bar:** The length of the colored bar indicates the relative importance of the feature. Longer bars are more important. The bar can also display confidence intervals (see menu options).
 **Sorting:** Use the dropdown menu to sort features by different criteria:
@@ -107,7 +107,7 @@ FlowFI saves the analysis output in a CSV file with the following columns:
 **LowCI / UpperCI**: The lower and upper confidence interval bounds for the Relative Importance (if calculated).
 **comparison**: The change in rank compared to a loaded reference file (if used).
 
-##References
+## References
 [1] He, X., Cai, D., & Niyogi, P. (2005). Laplacian score for feature selection. Advances in neural information processing systems, 18.
 [2] Traag, V. A., Waltman, L., & Van Eck, N. J. (2019). From Louvain to Leiden: guaranteeing well-connected communities. Scientific reports, 9(1), 5233.
 [3] Monti, S., Tamayo, P., Mesirov, J., & Golub, T. (2003). Consensus Clustering: A Resampling-Based Method for Class Discovery and Visualization of Gene Expression Microarray Data. Machine Learning, 52, 91–118.
