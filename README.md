@@ -1,4 +1,4 @@
-# FlowFI - Design Update v0.4
+# FlowFI - Image Parameter Design Update v0.4
 
 FlowFI (Flow cytometry Feature Importance) is a Python-based, graphical tool for experimentalists, clinicians, and analysts to perform data-driven analysis and now creation of cytometry data. This new version combines two key workflows into a single application:
 
