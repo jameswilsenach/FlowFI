@@ -33,7 +33,7 @@ FlowFI depends on FlowKit (which has additional dependent non-python files that 
 Alternatively, while in the FlowFI directory, run the following in the command line:
 
 ```
-python flowfi_dev.py
+python main.py
 ```
 
 FlowFI uses FlowIO and FlowKit to load .fcs files and PyQt5 to implement the Graphical User Interface (GUI).
