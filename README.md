@@ -5,7 +5,7 @@ FlowFI (Flow cytometry Feature Importance) is a Python-based, graphical tool for
 - **Feature Design**: Interactively build image processing pipelines to engineer and quantify novel morphological or spatial features from imaging cytometry data (.tiff).
 - **Feature Refinement**: Analyze existing tabular data (.fcs, .csv) to rank measurement channels (features) by their importance to the data's structure.
 
-The software was originally designed for data from instruments like the BD FACSDiscover™ S8 Cell Sorter but is compatible with generic .fcs and .tiff files. FlowFI does not perform or suggest a gating strategy, but instead ranks features by how much of the variance in the samples they account for using a robust spectral manifold learningmethod based on the Laplacian Score [1], with more importance measures to follow.
+The software was originally designed for data from instruments like the BD FACSDiscover™ S8 Cell Sorter but is compatible with generic .fcs and .tiff files. FlowFI does not perform or suggest a gating strategy, but instead ranks features by how much of the variance in the samples they account for using a robust spectral manifold learningmethod based on the Laplacian Score [1], with other measures available.
 
 This dual-tab approach allows for users to cycle between hypothesis generation (Design) and validation (Refine). A researcher can engineer a new biological feature, export it as a parameter, and then use the Refine tab to see how important their custom feature is compared to other parameters or related measurements.
 
@@ -43,7 +43,9 @@ This tab is a workbench for creating new, quantifiable features from multi-chann
 
 ![design_tab](https://github.com/jameswilsenach/FlowFI/blob/main/design.png?raw=true)
 
-### Basic Workflow:
+
+
+## Basic Workflow:
 - Use the file tree on the left to navigate to and double-click a .tiff file to load it.
 - The original image for the selected channel appears in the top-left panel. The top-right panel shows the result of the image processing pipeline.
 - Use the menus (Preprocessing, Quantify) to build an analysis pipeline. Preprocessing operations are applied sequentially with the currently selected quantify option as the final operation that will produce a numerical value.
@@ -114,6 +116,37 @@ FlowFI saves the analysis output in a CSV file with the following columns:
 
 **comparison**: The change in rank compared to a loaded reference file (if used).
 
+## Running FlowFI on a Remote HPC (X11 Forwarding)
+
+FlowFI is a graphical application, but it can be run on a remote Linux-based High-Performance Computing (HPC) cluster while displaying the interface on your local machine. This is achieved using **X11 Forwarding** over SSH.
+
+### Prerequisites
+
+Before connecting, you must have an X11 display server installed and running on your local machine:
+
+*   **Windows:** Install [VcXsrv](https://sourceforge.net/projects/vcxsrv/) or [Xming](https://sourceforge.net/projects/xming/). Ensure the X server is running (usually indicated by an icon in your system tray) before you connect.
+*   **macOS:** Install [XQuartz](https://www.xquartz.org/). You may need to log out and log back in after installation.
+*   **Linux:** Most desktop Linux distributions have an X server installed by default.
+
+*Note: The remote HPC cluster must also have X11 forwarding enabled by the system administrators (this is standard on most research clusters).*
+
+### Connection and Execution
+
+1. **Connect to the HPC:** Open your local terminal (or PowerShell/Command Prompt on Windows) and connect to your remote cluster using the `-Y` (Trusted X11) or `-X` (Untrusted X11) flag. `-Y` is generally recommended for complex graphical Python applications to avoid strict security policy errors.
+
+   ```bash
+   ssh -Y your_username@your_hpc_address
+   ```
+2. Load your environment: Once logged in, navigate to your project directory and activate the Python environment where FlowFI and its dependencies are installed.
+   ```bash
+   cd /path/to/FlowFI_Data source .venv/bin/activate# Or 'conda activate flowfi_env'
+   ```
+3. **Launch FlowFI:** Run the application just as you would locally. The GUI will take a moment to forward over the network and then appear on your local desktop.
+```bash
+python `flowfi.py`
+```
+
+ 
 ## References
 [1] He, X., Cai, D., & Niyogi, P. (2005). Laplacian score for feature selection. Advances in neural information processing systems, 18.  
 [2] Traag, V. A., Waltman, L., & Van Eck, N. J. (2019). From Louvain to Leiden: guaranteeing well-connected communities. Scientific reports, 9(1), 5233.  
