@@ -14,6 +14,11 @@ from scipy.stats import kendalltau
 from sklearn.metrics import pairwise_distances,adjusted_mutual_info_score
 from sklearn_extra.cluster import KMedoids
 from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from scipy.sparse import csr_matrix
+from minisom import MiniSom
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.feature_selection import mutual_info_regression
 import leidenalg as la
 import igraph as ig
 
@@ -84,6 +89,115 @@ excludedcols += ['Protocol', 'EventLabel', 'Regions0', 'Regions1', 'Regions2',
        'SaturatedChannels2', 'SpectralEventWidth', 'EventWidthInDrops',
        'SpectralUnmixingFlags', 'WaveformPresent']
 
+
+def get_similaritymatrix(X, k=15, t=1.0, mode='cosine', chunk_size=5000):
+    n = X.shape[0]
+    k_eff = min(k + 1, n - 1)
+    use_sparse = n > 2000
+    
+    rows, cols, vals = [], [], []
+
+    for start in range(0, n, chunk_size):
+        end = min(start + chunk_size, n)
+        chunk = X[start:end]
+        
+        D_chunk = pairwise_distances(chunk, X, metric='cosine' if mode=='cosine' else 'euclidean')
+        
+        partition_indices = np.argpartition(D_chunk, k_eff, axis=1)[:, :k_eff]
+        
+        row_idx = np.arange(D_chunk.shape[0])[:, None]
+        nearest_dists = D_chunk[row_idx, partition_indices]
+        
+        for i in range(end - start):
+            global_row = start + i
+            rows.extend([global_row] * k_eff)
+            cols.extend(partition_indices[i])
+            vals.extend(nearest_dists[i])
+
+    rows, cols, vals = np.array(rows), np.array(cols), np.array(vals)
+    if mode == 'heat':
+        weights = np.exp(-vals**2 / (2 * t**2))
+    else:
+        weights = np.abs(1 - vals)
+
+    if use_sparse:
+        W = csr_matrix((weights, (rows, cols)), shape=(n, n))
+        W = W.maximum(W.T)
+        W.setdiag(0)
+    else:
+        W = np.zeros((n, n))
+        W[rows, cols] = weights
+        W = np.maximum(W, W.T)
+        np.fill_diagonal(W, 0)
+        
+    return W
+
+def lsRI_metric(X, numf, k=5, t=1.0, mode='cosine'):
+    n = X.shape[0]
+    W = get_similaritymatrix(X, k=k, t=t, mode=mode)
+    
+    d_vec = np.array(W.sum(axis=1)).flatten()
+    D_sum = d_vec.sum()
+    
+    weighted_means = (X.T @ d_vec) / D_sum
+    X_centered = X - weighted_means
+    
+    den = np.sum((X_centered**2).T * d_vec, axis=1)
+    
+    fWf = np.sum(X_centered * (W @ X_centered), axis=0)
+    num = den - fWf
+    
+    ls = np.divide(num, den, out=np.zeros_like(num), where=den != 0)
+    return ls
+
+def pRI_metric(sample, numf, threshold=0.8):    
+    pca = PCA().fit(sample)    
+    k = np.argmax(np.cumsum(pca.explained_variance_ratio_) >= threshold) + 1    
+    return np.dot(pca.explained_variance_ratio_[:k], np.abs(pca.components_[:k]))
+
+def sRI_metric(sample, numf, grid_size=5, iterations=1000):
+    som = MiniSom(grid_size, grid_size, numf, 
+                  sigma=1.0, 
+                  learning_rate=0.05, 
+                  neighborhood_function='gaussian')
+    
+    som.train_batch(sample, iterations)
+    
+    node_weights = som.get_weights().reshape(grid_size*grid_size, numf)
+    
+    k_meta = 5 
+    clusterer = AgglomerativeClustering(n_clusters=k_meta, linkage='ward')
+    metacluster_indices = clusterer.fit_predict(node_weights)
+    
+    meta_medians = []
+    meta_iqrs = []
+    
+    for c in range(k_meta):
+        mask = metacluster_indices == c
+        if np.any(mask):
+            meta_medians.append(np.median(node_weights[mask], axis=0))
+            meta_iqrs.append(np.percentile(node_weights[mask], 75, axis=0) - 
+                             np.percentile(node_weights[mask], 25, axis=0))
+    
+    meta_medians = np.array(meta_medians)
+    meta_iqrs = np.array(meta_iqrs)
+
+    global_variability = np.std(meta_medians, axis=0)
+    avg_within_cluster_spread = np.mean(meta_iqrs, axis=0) + 1e-10
+    
+    return global_variability / avg_within_cluster_spread
+
+def miRI_metric(X, numf):
+    mi_scores = np.zeros(numf)
+    for i in range(numf):
+        X_other = np.delete(X, i, axis=1)
+        y_current = X[:, i]
+        
+        shared_info = mutual_info_regression(X_other, y_current, n_neighbors=15)
+        
+        mi_scores[i] = np.mean(shared_info)
+        
+    return mi_scores
 
 class OperationHistory(QWidget):
     info_updated = pyqtSignal(str)
@@ -175,9 +289,10 @@ class WorkerThread(QThread):
     intermediate_result = pyqtSignal(dict)
     result_ready = pyqtSignal()
 
-    def __init__(self, data, boots=BOOT, bootsize=BOOTSIZE, conv_check=True, conv_threshold=THRESHOLD):
+    def __init__(self, data, boots=BOOT, bootsize=BOOTSIZE, conv_check=True, conv_threshold=THRESHOLD, metric_name="lsRI"):
         super().__init__()
         self.data = data
+        self.metric_name = metric_name
         
         N = self.data.shape[0]
         self.n = bootsize
@@ -229,8 +344,20 @@ class WorkerThread(QThread):
 
     # Function to allow for possible multithread parrallelisation
     def process_part(self, i):
-        ls,medoids,medlabels = self.get_ulscore_parralel()
-        return {"value": ls,"i": i,"medoids": medoids,"membership":medlabels}
+        sample_idx = np.random.choice(self.data.shape[0], self.n)
+        Xsub = self.data[sample_idx, :]
+        
+        if self.metric_name == "pRI":
+            val = pRI_metric(Xsub, self.data.shape[1], threshold=0.8)
+        elif self.metric_name == "sRI":
+            val = sRI_metric(Xsub, self.data.shape[1])
+        elif self.metric_name == "miRI":
+            val = miRI_metric(Xsub, self.data.shape[1])
+        else:
+            val = lsRI_metric(Xsub, self.data.shape[1], k=self.k, t=self.t, mode=self.mode)
+            
+        medoids, medlabels = self.kmedoids(Xsub.T)
+        return {"value": val, "i": i, "medoids": medoids, "membership": medlabels}
     
     # Leidenalg cluster function based on medoids memberships so far
     def getclust(self,mems):
@@ -252,83 +379,6 @@ class WorkerThread(QThread):
         medoids = model.medoid_indices_
         medlabels = model.labels_
         return medoids,medlabels
-    
-    # Partially paralllelised feature scoring (TO DO: Vectorise feature by feature scoring for full max parr)
-    def get_ulscore_parralel(self):
-        n = self.n
-        ones = np.ones((n,1))
-        sample = np.random.choice(self.data.shape[0],n)
-        Xsub = self.data[sample,:]
-        Wsub = self.get_similaritymatrix(Xsub)
-        Dsub = np.diagflat(np.sum(Wsub,axis=0))
-        Lsub = Dsub - Wsub
-        LSsub = np.zeros(Xsub.shape[1])
-        for r in range(Xsub.shape[1]):#iterate over features
-            fsubr = Xsub[:,r].reshape([-1,1])
-            neighb_est = ((fsubr.T @ Dsub @ ones).item()/ (ones.T @ Dsub @ ones).item())*ones
-            fsubr_est = (fsubr - neighb_est)#subtract nbh mean est of feature to centre feature vector
-            d = (fsubr_est.T @ Dsub @ fsubr_est).item()
-            num = (fsubr_est.T @ Lsub @ fsubr_est).item()
-            if d > 0 and num>0:
-                LSsub[r] = num/d
-            elif num==0 and d>0:
-                LSsub[r] = 0.
-            else:
-                LSsub[r] = 0.
-        medoids,medlabels = self.kmedoids(Xsub.T)
-        return LSsub,medoids,medlabels
-    
-    def get_similaritymatrix(self, X):
-        """
-        Optimized similarity matrix calculation for GUI classes.
-        Uses np.partition for O(N) neighbor thresholding and 
-        ensures graph symmetry.
-        """
-        t = self.t
-        k = self.k
-        n = X.shape[0]
-        mode = self.mode
-
-        # 1. Compute pairwise distances using the existing UI mode
-        # Assuming self.getpwd is available in your class as defined previously
-        D = self.getpwd(X, mode)
-        
-        # 2. Optimized k-nearest neighbor thresholding
-        # k+1 because the first neighbor is always the point itself (dist=0)
-        k_effective = min(k + 1, n - 1)
-        
-        # np.partition is faster than np.sort for finding the k-th element
-        # Get the distance to the k-th neighbor for every row
-        kn_dist = np.partition(D, k_effective, axis=1)[:, k_effective].reshape(-1, 1)
-
-        # 3. Adjacency Logic
-        # Compare each row's distances to its specific k-th neighbor threshold
-        G = D <= kn_dist
-        
-        # Ensure Symmetry: If A is a neighbor of B OR B is a neighbor of A
-        # This prevents 'one-way' edges which can lead to lead to non-physical LS results
-        G = np.logical_or(G, G.T)
-        
-        # Remove self-loops (diagonal)
-        np.fill_diagonal(G, 0)
-
-        # 4. Weighting
-        W = np.zeros([n, n])
-        if mode == 'heat':
-            W[G] = np.exp(-D[G]**2 / (2 * t**2))
-        else:
-            # Cosine/Standard mode: Similarity = 1 - Distance
-            # Using abs(1-D) ensures positive weights even with slight float errors
-            W[G] = np.abs(1 - D[G])
-            
-        return W
-    
-    def getpwd(self,X,mode='cosine'):
-        if mode == 'heat':#heat kernel based pwd (euclidean)
-            D = pairwise_distances(X)
-        if mode == 'cosine':#cosine pwd
-            D = pairwise_distances(X,metric='cosine')
-        return D
 
     def splittest(self,data,th):
         shape = data.shape[1]
@@ -2022,6 +2072,27 @@ class MainWindow(QMainWindow):
         refine_menu.addAction(self.calc_ci_action)
 
         refine_menu.addSeparator()
+        
+        self.ri_group = QActionGroup(self)
+        self.lsri_action = QAction('Use lsRI (Laplacian Score)', self, checkable=True)
+        self.pri_action = QAction('Use pRI (PCA-based)', self, checkable=True)
+        self.sri_action = QAction('Use sRI (SOM-based)', self, checkable=True)
+        self.miri_action = QAction('Use miRI (Mutual Information)', self, checkable=True)
+        self.lsri_action.setChecked(True)
+        
+        self.ri_group.addAction(self.lsri_action)
+        self.ri_group.addAction(self.pri_action)
+        self.ri_group.addAction(self.sri_action)
+        self.ri_group.addAction(self.miri_action)
+        
+        ri_menu = refine_menu.addMenu('RI Metric')
+        ri_menu.addAction(self.lsri_action)
+        ri_menu.addAction(self.pri_action)
+        ri_menu.addAction(self.sri_action)
+        ri_menu.addAction(self.miri_action)
+
+        refine_menu.addSeparator()
+        
         preferences_action = QAction('Preferences...', self)
         preferences_action.triggered.connect(self.open_refine_preferences)
         refine_menu.addAction(preferences_action)
@@ -2080,11 +2151,23 @@ class MainWindow(QMainWindow):
                         for f in line.keys():
                             loaded_result[f] += [line[f]]
                 # print(fieldnames)
+                
+                metric_keys = ['lsRI', 'pRI', 'sRI', 'miRI']
+                loaded_metric_key = None
+                for mk in metric_keys:
+                    if mk in fieldnames:
+                        loaded_metric_key = mk
+                        break
+
                 for f in fieldnames:
                     if f!='feature':
                         loaded_result[f] = np.array(loaded_result[f]).astype('float')
                     else:
                         loaded_result[f] = np.array(loaded_result[f])
+                
+                if loaded_metric_key and loaded_metric_key != 'raw_score':
+                    loaded_result['raw_score'] = loaded_result[loaded_metric_key]
+                        
                 self.loaded_result = loaded_result
                 self.update_display()
                 # QMessageBox.information(self, "Success", "Output successfully loaded from CSV file.")
@@ -2123,9 +2206,21 @@ class MainWindow(QMainWindow):
 
 
         self.progress_bar.setValue(0)
+        
+        if self.sri_action.isChecked():
+            metric_name = "sRI"
+        elif self.miri_action.isChecked():
+            metric_name = "miRI"
+        elif self.pri_action.isChecked():
+            metric_name = "pRI"
+        else:
+            metric_name = "lsRI"
+            
+        self.is_cost = metric_name == "lsRI"
 
         self.worker = WorkerThread(self.data, boots=self.boots_param, bootsize=self.bootsize_param, 
-                                   conv_check=self.convergence_check, conv_threshold=self.convergence_threshold)
+                                   conv_check=self.convergence_check, conv_threshold=self.convergence_threshold,
+                                   metric_name=metric_name)
         self.boots = self.worker.boots
         self.feature_averages = np.zeros((self.data.shape[1],self.boots))
         self.calculated = np.zeros((self.boots))
@@ -2237,7 +2332,7 @@ class MainWindow(QMainWindow):
         imp_calculated = self.feature_averages[:,non0]
         mean_value = np.mean(imp_calculated,axis=1).flatten()
         mdds = np.sum(self.medoids[:,non0],axis=1).flatten()
-        self.result = {'ls': mean_value,'i': i,'medoids': mdds,'membership':result['membership']}
+        self.result = {'raw_score': mean_value,'i': i,'medoids': mdds,'membership':result['membership']}
 
     def color_name_to_rgba(self,color_name):
         try:
@@ -2261,7 +2356,10 @@ class MainWindow(QMainWindow):
             self.output_widget.setLayout(self.output_layout)
             self.output_panel.setWidget(self.output_widget)
 
-            mean_value = 1-self.NormalizeData(self.result['ls'])[filter]
+            if getattr(self, 'is_cost', True):
+                mean_value = 1-self.NormalizeData(self.result['raw_score'])[filter]
+            else:
+                mean_value = self.NormalizeData(self.result['raw_score'])[filter]
             
             loaded_final = self.finalcluster and hasattr(self,"loaded_result")
             if loaded_final:
@@ -2273,8 +2371,8 @@ class MainWindow(QMainWindow):
                 for i in range(len(ffeatures)):
                     if ffeatures[i] in loaded_ffeatures:
                         ind = int(np.where(ffeatures[i]==loaded_ffeatures)[0][0])
-                        loaded_orderedimp[i] = self.loaded_result['ls'][ind]
-                        orderedimp[i] = self.result['ls'][filter][i]
+                        loaded_orderedimp[i] = self.loaded_result['raw_score'][ind]
+                        orderedimp[i] = self.result['raw_score'][filter][i]
                     else:
                         orderedimp[i] = -1
                         loaded_orderedimp[i] = -1
@@ -2455,7 +2553,10 @@ class MainWindow(QMainWindow):
         self.output_widget.adjustSize()
         self.consensusclustering_final()
         self.update_display()
-        self.result['Relative Importance'] = 1 - self.NormalizeData(self.result['ls'])
+        if getattr(self, 'is_cost', True):
+            self.result['Relative Importance'] = 1 - self.NormalizeData(self.result['raw_score'])
+        else:
+            self.result['Relative Importance'] = self.NormalizeData(self.result['raw_score'])
         self.calculate_cis()
 
         self.result['Centrality'] = self.NormalizeData(self.result['medoids'])
@@ -2465,29 +2566,38 @@ class MainWindow(QMainWindow):
 
     def calculate_cis(self):
         if self.calc_ci_action.isChecked() and hasattr(self, 'result') and hasattr(self, 'feature_averages'):
-            negls = -self.result['ls']
-            neglsmin = np.min(negls)
-            neglsmax = np.max(negls)
+            raw_mean = self.result['raw_score']
             s = self.feature_averages.shape[1]
             numf = self.feature_averages.shape[0]
-            
+
             sample_ris = np.zeros([self.ci_boots,numf])
-            sample_negls = np.zeros([self.ci_boots,numf])
+            sample_raw = np.zeros([self.ci_boots,numf])
             for i in range(self.ci_boots):
                 temp_ls = self.feature_averages[:,np.random.choice(s,s,replace=True)]
                 temp_mean = np.mean(temp_ls,axis=1)
-                sample_ris[i,:] = 1-self.NormalizeData(temp_mean)
-                sample_negls[i,:] = -temp_mean
-            
-            neglcis = np.array([np.percentile(sample_negls[:,m],self.ci_alpha/2) for m in np.arange(numf)])
-            negucis = np.array([np.percentile(sample_negls[:,m],100-self.ci_alpha/2) for m in np.arange(numf)])
-            
-            lb_violation = [neglsmin>=neglcis[m] for m in range(numf)]
-            ub_violation = [neglsmax<=negucis[m] for m in range(numf)]
+
+                if getattr(self, 'is_cost', True):
+                    sample_ris[i,:] = 1-self.NormalizeData(temp_mean)
+                else:
+                    sample_ris[i,:] = self.NormalizeData(temp_mean)
+                sample_raw[i,:] = temp_mean
+
+            raw_lcis = np.array([np.percentile(sample_raw[:,m],self.ci_alpha/2) for m in np.arange(numf)])
+            raw_ucis = np.array([np.percentile(sample_raw[:,m],100-self.ci_alpha/2) for m in np.arange(numf)])
+
+            if getattr(self, 'is_cost', True):
+                obs_max = np.max(raw_mean)
+                obs_min = np.min(raw_mean)
+                lb_violation = [obs_max <= raw_ucis[m] for m in range(numf)]
+                ub_violation = [obs_min >= raw_lcis[m] for m in range(numf)]
+            else:
+                obs_max = np.max(raw_mean)
+                obs_min = np.min(raw_mean)
+                lb_violation = [obs_min >= raw_lcis[m] for m in range(numf)]
+                ub_violation = [obs_max <= raw_ucis[m] for m in range(numf)]
 
             lcis = np.array([np.percentile(sample_ris[:,m],self.ci_alpha/2) for m in np.arange(numf)])
             ucis = np.array([np.percentile(sample_ris[:,m],100-self.ci_alpha/2) for m in np.arange(numf)])
-
             lcis[lb_violation] = 0.
             ucis[ub_violation] = 1.
 
@@ -2509,24 +2619,25 @@ class MainWindow(QMainWindow):
         options = QFileDialog.Options()
         filepath, _ = QFileDialog.getSaveFileName(self, "Save Output", "", "CSV Files (*.csv)", options=options)
         if filepath:
+            metric_name = getattr(self.worker, 'metric_name', 'ls') if hasattr(self, 'worker') else 'ls'
             try:
                 with open(filepath, 'w', newline='') as csvfile:
                     if not hasattr(self,"loaded_result"):
-                        fieldnames = ['feature','ri', 'ls','membership','centrality']
+                        fieldnames = ['feature','ri', metric_name,'membership','centrality']
                         if 'LowCI' in self.result:
                             fieldnames += ['LowCI', 'UpperCI']
                     else:
-                        fieldnames = ['feature','ri', 'ls','membership','centrality',"comparison"]
+                        fieldnames = ['feature','ri', metric_name,'membership','centrality',"comparison"]
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                     writer.writeheader()
-                    result = self.result['ls']
+                    result = self.result['raw_score']
                     impresult = self.result['Relative Importance']
                     columns = self.columns
                     memb = self.result['Membership']
                     centrality = self.result['Centrality']
                     if not hasattr(self,"loaded_result"):
                         for i in range(len(result)):
-                            row_data = {'feature': columns[i], 'ri': impresult[i], 'ls': result[i],'membership':memb[i],'centrality': centrality[i]}
+                            row_data = {'feature': columns[i], 'ri': impresult[i], metric_name: result[i],'membership':memb[i],'centrality': centrality[i]}
                             if 'LowCI' in self.result:
                                 row_data['LowCI'] = self.result['LowCI'][i]
                                 row_data['UpperCI'] = self.result['UpperCI'][i]
@@ -2534,7 +2645,7 @@ class MainWindow(QMainWindow):
                     else:
                         comparison = self.result['Comparison']
                         for i in range(len(result)):
-                            writer.writerow({'feature': columns[i], 'ri': impresult[i], 'ls': result[i],'membership':memb[i],'centrality': centrality[i],'comparison': comparison[i]})
+                            writer.writerow({'feature': columns[i], 'ri': impresult[i], metric_name: result[i],'membership':memb[i],'centrality': centrality[i],'comparison': comparison[i]})
                 QMessageBox.information(self, "Success", "Output successfully saved to CSV file.")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save output to CSV file: {e}")
@@ -2846,9 +2957,20 @@ class HelpDialog(QDialog):
         <ol>
             <li>Enter the <code>.fcs</code> file path manually or click <b>Browse</b> to select a file.</li>
             <li>Use the checkboxes at the top to include or exclude broad categories of features from the analysis.</li>
+            <li>Select your desired <b>RI Metric</b> from the Refine menu (details below).</li>
             <li>Click <b>Execute</b> to start the analysis. The process involves bootstrapping and may take some time, with progress shown in the progress bar.</li>
             <li>Results will be displayed in the main panel, ranked by importance by default.</li>
         </ol>
+
+        <h3>Relative Importance (RI) Metrics:</h3>
+        <table border="1" cellpadding="5" style="border-collapse: collapse;">
+            <tr><th>Method</th><th>Local-Global Structure</th><th>Importance Methodology</th></tr>
+            <tr><td>Laplace-Scoring (lsRI)</td><td>Intermediate</td><td>Neighbourhood preservation</td></tr>
+            <tr><td>PCA (pRI)</td><td>Global</td><td>Linear variability explained</td></tr>
+            <tr><td>SOM (sRI)</td><td>Local</td><td>Cluster identity preservation</td></tr>
+            <tr><td>Mutual Information (miRI)</td><td>Global</td><td>Maximum informational dependence</td></tr>
+        </table>
+        <br>
 
         <h3>Interpreting the Results:</h3>
         <ul>
@@ -2856,7 +2978,7 @@ class HelpDialog(QDialog):
             <li><b>Importance Bar:</b> The length of the colored bar indicates the relative importance of the feature. Longer bars are more important.</li>
             <li><b>Sorting:</b> Use the dropdown menu to sort features by different criteria:
                 <ul>
-                    <li><b>Importance:</b> (Default) Ranks features by their Laplacian Score, which measures how well a feature preserves the local data structure.</li>
+                    <li><b>Importance:</b> (Default) Ranks features by their chosen Relative Importance (RI) score.</li>
                     <li><b>Type:</b> Groups features by their category (e.g., UV, V, B).</li>
                     <li><b>Cluster:</b> Groups features that are algorithmically determined to be similar to each other. The border color indicates cluster membership.</li>
                     <li><b>Centrality:</b> Ranks features by how representative they are of their assigned cluster. Central features are underlined.</li>
@@ -2867,6 +2989,7 @@ class HelpDialog(QDialog):
         
         <h3>Menu Options (Refine -> ...):</h3>
         <ul>
+            <li><b>RI Metric:</b> Choose the algorithm used to evaluate feature importance.</li>
             <li><b>Save Output as CSV:</b> Saves the full results table, including raw scores and cluster memberships, to a CSV file.</li>
             <li><b>Load Output CSV for Comparison:</b> Loads a previously saved run to enable the "Sort by: Change from Previous" option.</li>
         </ul>
