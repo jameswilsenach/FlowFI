@@ -18,7 +18,7 @@ To install FlowFI from source in a new Python 3.10 environment, download the rep
 conda create -n flowfi python=3.10
 conda activate flowfi
 pip install flowkit
-conda install -c conda-forge numpy=1.26 pandas scipy opencv pyqt scikit-learn scikit-learn-extra matplotlib leidenalg tifffile scikit-image
+conda install -c conda-forge numpy=1.26 pandas scipy opencv pyqt scikit-learn scikit-learn-extra matplotlib leidenalg tifffile scikit-image minisom
 ```
 
 To build a flowfi executable on your platform follow these steps:
