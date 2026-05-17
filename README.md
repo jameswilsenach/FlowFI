@@ -1,4 +1,4 @@
-# FlowFI - Image Parameter Design Update v0.4
+# FlowFI - Image Parameter Design Update v0.5
 
 FlowFI (Flow cytometry Feature Importance) is a Python-based, graphical tool for experimentalists, clinicians, and analysts to perform data-driven analysis and now creation of cytometry data. This new version combines two key workflows into a single application:
 
@@ -10,7 +10,7 @@ The software was originally designed for data from instruments like the BD FACSD
 This dual-tab approach allows for users to cycle between hypothesis generation (Design) and validation (Refine). A researcher can engineer a new biological feature, export it as a parameter, and then use the Refine tab to see how important their custom feature is compared to other parameters or related measurements.
 
 ## Installation
-For Windows machines, download the flowfi.zip file in the repository and unzip it to an available folder. Run the program as you would any other .exe file.
+For Windows machines, download the installation file, FlowFI_Setup.exe. Install the programme as you would any other Windows programme.
 
 To install FlowFI from source in a new Python 3.10 environment, download the repository and navigate to the FlowFI directory. Then use the following command in your command line:
 
