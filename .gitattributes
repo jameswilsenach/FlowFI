@@ -1,3 +1,4 @@
 *.zip filter=lfs diff=lfs merge=lfs -text
 .zip filter=lfs diff=lfs merge=lfs -text
 flowfi.zip filter=lfs diff=lfs merge=lfs -text
+FlowFI_Setup.exe filter=lfs diff=lfs merge=lfs -text
