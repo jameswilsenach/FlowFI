@@ -15,4 +15,4 @@ FlowFI does not integrate with any third-party tracking software, analytics serv
 Because FlowFI is designed as a secure, local scientific tool, our data practices are unlikely to change. If any future updates introduce optional network features (such as automated version checking or crash reporting), this policy will be updated accordingly, and any data transmission will remain strictly opt-in.
 
 ## 4. Contact
-If you have any questions regarding this privacy policy, please open an issue on the project's repository: [https://github.com/jameswilsenach/FlowFI]
+If you have any questions regarding this privacy policy, please open an issue on the project's repository [here](https://github.com/jameswilsenach/FlowFI).
