@@ -5,6 +5,41 @@ import re
 import time
 import traceback
 
+# Third-party imports for GUI (needed immediately for splash screen)
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                             QLineEdit, QCheckBox, QPushButton, QProgressBar, QLabel, QFileDialog, QScrollArea, QFrame,
+                             QAction, QMessageBox,QComboBox,QTabWidget,QSplitter, QFileSystemModel,QTreeView,QSlider,QMenu,QTextEdit,QSizePolicy,QDialog,QActionGroup, QDialogButtonBox, QGridLayout, QProgressDialog, QSplashScreen)
+from PyQt5.QtCore import QThread, pyqtSignal,  QTimer, Qt, QDir
+from PyQt5.QtGui import QPixmap, QImage, QIcon, QPainter, QBrush, QPen, QColor,QIcon
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+# ---------------------------------------------------------
+# SHOW SPLASH SCREEN AS EARLY AS POSSIBLE
+# ---------------------------------------------------------
+if __name__ == '__main__':
+    # Initialize app and show splash screen before heavy imports
+    app = QApplication(sys.argv)
+    splash = None
+    splash_path = resource_path('flowfi_logo_white.png')
+    if os.path.exists(splash_path):
+        pixmap = QPixmap(splash_path)
+        splash = QSplashScreen(pixmap, Qt.WindowStaysOnTopHint)
+        splash.showMessage("Loading FlowFI libraries...", Qt.AlignBottom | Qt.AlignCenter, Qt.white)
+        splash.show()
+        app.processEvents()
+else:
+    app = None
+    splash = None
+
 # Third-party imports for data and analysis
 import flowio
 import flowkit as fk
@@ -22,12 +57,6 @@ from sklearn.feature_selection import mutual_info_regression
 import leidenalg as la
 import igraph as ig
 
-# Third-party imports for GUI
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QLineEdit, QCheckBox, QPushButton, QProgressBar, QLabel, QFileDialog, QScrollArea, QFrame,
-                             QAction, QMessageBox,QComboBox,QTabWidget,QSplitter, QFileSystemModel,QTreeView,QSlider,QMenu,QTextEdit,QSizePolicy,QDialog,QActionGroup, QDialogButtonBox, QGridLayout, QProgressDialog, QSplashScreen)
-from PyQt5.QtCore import QThread, pyqtSignal,  QTimer, Qt, QDir
-from PyQt5.QtGui import QPixmap, QImage, QIcon, QPainter, QBrush, QPen, QColor,QIcon
 import matplotlib
 import matplotlib.colors as mcolors
 
@@ -41,16 +70,6 @@ from skimage.measure import label, regionprops
 from skimage.segmentation import watershed
 from skimage.feature import peak_local_max,canny
 from scipy.stats import skew, binned_statistic
-
-def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
 
 EVAL = False
 #SIM = False
@@ -928,7 +947,7 @@ class MainWindow(QMainWindow):
         score = np.nan
         
         # Prepare optional global mask if it exists
-        global_mask_channel = self.agg_channels.get('Global Mask (Optional)')
+        global_mask_channel = self.agg_channels.get('Global Mask (Optional)') if self.agg_channels is not None else None
         global_mask = None
         if global_mask_channel is not None:
             global_mask = self.process_image_for_channel(global_mask_channel, source_image_array=image)
@@ -3145,17 +3164,8 @@ class RefinePreferencesDialog(QDialog):
                 QMessageBox.warning(self, "Invalid Input", "Values must be positive integers.")
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-
-    # Create and show splash screen
-    splash = None
-    splash_path = 'flowfi_logo_white.png'
-    if os.path.exists(splash_path):
-        pixmap = QPixmap(splash_path)
-        splash = QSplashScreen(pixmap, Qt.WindowStaysOnTopHint)
-        splash.showMessage("Loading FlowFI...", Qt.AlignBottom | Qt.AlignCenter, Qt.white)
-        splash.show()
-        app.processEvents() # Ensure splash screen is displayed
+    if app is None:
+        app = QApplication(sys.argv)
 
     main_window = MainWindow()
     main_window.showMaximized()
