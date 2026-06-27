@@ -27,7 +27,7 @@ To build a flowfi executable on your platform follow these steps:
 ```
 conda activate flowfi
 pip install pyinstaller
-pyinstaller --onefile --windowed main.py -n flowfi --collect-all flowkit
+pyinstaller --onedir --windowed --name="FlowFI" --icon="logo.ico" --add-data="logo.png;."  --collect-all flowkit main.py
 ```
 FlowFI depends on FlowKit (which has additional dependent non-python files that must be explicitly included in the build) for extraction and manipulation of .fcs files. The executable should be found in the .dist directory.
 ### Run FlowFI from Source
