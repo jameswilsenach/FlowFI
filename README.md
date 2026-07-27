@@ -1,165 +1,174 @@
-# FlowFI - Image Parameter Design Update v0.5.1
+# FlowFI - Image Parameter Design & Feature Importance (v1.6.0)
 
-FlowFI (Flow cytometry Feature Importance) is a Python-based, graphical tool for experimentalists, clinicians, and analysts to perform data-driven analysis and now creation of cytometry data. This new version combines two key workflows into a single application:
+FlowFI (Flow cytometry Feature Importance) is a Python-based, graphical tool for experimentalists, clinicians, and analysts to perform data-driven analysis and creation of cytometry data. FlowFI combines two key workflows into a single application:
 
-- **Feature Design**: Interactively build image processing pipelines to engineer and quantify novel morphological or spatial features from imaging cytometry data (.tiff).
-- **Feature Refinement**: Analyze existing tabular data (.fcs, .csv) to rank measurement channels (features) by their importance to the data's structure.
+- **Feature Design**: Interactively build, save, and automate image processing pipelines to engineer and quantify novel morphological or spatial features from imaging cytometry data (.tiff).
+- **Feature Refinement**: Analyze tabular data (.fcs, .csv) to rank measurement channels (features) by their importance to the data's structure using manifold learning and statistical metrics.
 
-The software was originally designed for data from instruments like the BD FACSDiscover™ S8 Cell Sorter but is compatible with generic .fcs and .tiff files. FlowFI does not perform or suggest a gating strategy, but instead ranks features by how much of the variance in the samples they account for using a robust spectral manifold learningmethod based on the Laplacian Score [1], with other measures available.
+The software was originally designed for data from instruments like the BD FACSDiscover™ S8 Cell Sorter but is compatible with generic .fcs and .tiff files. FlowFI does not perform or suggest a gating strategy, but instead ranks features by how much variance in the samples they account for using robust feature importance metrics (such as the Laplacian Score [1], PCA-based, SOM-based, or Mutual Information metrics).
 
-This dual-tab approach allows for users to cycle between hypothesis generation (Design) and validation (Refine). A researcher can engineer a new biological feature, export it as a parameter, and then use the Refine tab to see how important their custom feature is compared to other parameters or related measurements.
+This dual-tab approach allows users to cycle between hypothesis generation (Design) and validation (Refine). A researcher can engineer a new biological feature, export it as a parameter, and then use the Refine tab to evaluate how important their custom feature is compared to standard cytometry measurements.
+
+---
 
 ## Installation
-For Windows machines, download the installation file, FlowFI_v0.5.1.msix. Install the programme as you would any other Windows programme.
 
-To install FlowFI from source in a new Python 3.10 environment, download the repository and navigate to the FlowFI directory. Then use the following command in your command line:
+### Windows Application
+For Windows machines, download the latest installer or executable package (`FlowFI_v1.6.0.msix` / `FlowFI.exe`). Install and run the program as you would any native Windows application.
 
-```
+### Run FlowFI from Source
+To install FlowFI from source in a new Python 3.10 environment, clone or download the repository, navigate to the FlowFI directory, and run:
+
+```bash
 conda create -n flowfi python=3.10
 conda activate flowfi
-pip install flowkit
-conda install -c conda-forge "numpy<2" pandas scipy pyqt scikit-learn scikit-learn-extra matplotlib leidenalg tifffile scikit-image minisom
 pip install flowkit opencv-python-headless "numpy<2"
+conda install -c conda-forge "numpy<2" pandas scipy pyqt scikit-learn scikit-learn-extra matplotlib leidenalg tifffile scikit-image minisom
 ```
 
-To build a flowfi executable on your platform follow these steps:
+To launch FlowFI from the command line:
 
-```
-conda activate flowfi
-pip install pyinstaller
-pyinstaller --onedir --windowed --name="FlowFI" --icon="logo.ico" --add-data="logo.png;."  --collect-all flowkit main.py
-```
-FlowFI depends on FlowKit (which has additional dependent non-python files that must be explicitly included in the build) for extraction and manipulation of .fcs files. The executable should be found in the .dist directory.
-### Run FlowFI from Source
-Alternatively, while in the FlowFI directory, run the following in the command line:
-
-```
+```bash
 python main.py
 ```
 
-FlowFI uses FlowIO and FlowKit to load .fcs files and PyQt5 to implement the Graphical User Interface (GUI).
+### Build Executable
+To build a FlowFI executable on your platform:
+
+```bash
+conda activate flowfi
+pip install pyinstaller
+pyinstaller --onefile --windowed main.py -n flowfi --collect-all flowkit
+```
+The resulting executable will be located in the `dist/` directory.
+
+---
 
 ## Using FlowFI: The Design Tab
-This tab is a workbench for creating new, quantifiable features from multi-channel .tiff images.
+
+The Design Tab is a workbench for creating new, quantifiable features from multi-channel .tiff images.
 
 ![design_tab](https://github.com/jameswilsenach/FlowFI/blob/main/design.png?raw=true)
 
+### Basic Workflow:
+- Use the **File Tree** on the left to navigate folders and double-click a `.tiff` file to load it into the workspace.
+- The top-left panel displays the original selected channel image. The top-right panel shows the processed image resulting from your active pipeline.
+- Use the **Preprocessing** and **Quantify** menus to build an image analysis pipeline. Preprocessing operations are applied sequentially, with the selected quantify option producing the final numerical feature value.
+- Use **Undo** (`Ctrl+Z`) and **Redo** (`Ctrl+Y`) from the Preprocessing menu or toolbar to modify your pipeline sequence step-by-step.
+- The **Operation History** panel displays applied processing steps and quantification output.
 
+### Presets & Pipeline Automation
+- **Built-in Presets**: Access standard preset pipelines such as **OFDM (Optical Frequency Domain Multiplexing)** directly from `Preprocessing > Presets`.
+- **Save / Load Presets**: Save custom image processing pipelines to reusable JSON files or load existing preset files.
+- **Configurable Location**: Set a custom default folder path for saving and loading presets via `Preprocessing > Presets > Configure Presets Location`.
 
-## Basic Workflow:
-- Use the file tree on the left to navigate to and double-click a .tiff file to load it.
-- The original image for the selected channel appears in the top-left panel. The top-right panel shows the result of the image processing pipeline.
-- Use the menus (Preprocessing, Quantify) to build an analysis pipeline. Preprocessing operations are applied sequentially with the currently selected quantify option as the final operation that will produce a numerical value.
-- The Operation History terminal shows the list of applied steps and the result of any quantification.
-- Once a pipeline is defined, use the Parameters menu to apply it to a whole folder of images and export the results to a standard format (.fcs/.csv).
-
+### Preprocessing Operations:
+- **Filters**: Gaussian Blur (customizable kernel & sigma), Denoising.
+- **Manipulation**: Image Crop, Image Rescale (scaling factors & interpolation selection).
+- **Segmentation**: Mask Otsu, Label Image, Segment.
 
 ### Single-Channel Quantification Options:
-- **Count**: Counts unique non-zero labels (for counting objects).
-- **Area**: Counts the number of non-zero pixels.
-- **Solidity**: Measures object compactness.
+- **Count**: Counts unique non-zero labels (for object counting).
+- **Mean**: Calculates mean pixel intensity across non-zero regions.
+- **Area**: Counts total number of non-zero pixels.
+- **Solidity**: Measures object compactness relative to its convex hull.
 
 ### Multi-Channel Quantification Options:
-- **Colocalisation**: Fraction of a 'Signal' channel's intensity within a 'Mask' channel.
-- **Containment**: Fraction of a 'Signal' inside the core of a 'Container' (excluding its shell).
-- **Relative Skewness**: Radial skewness of a 'Signal' relative to a 'Reference' centroid.
-- **Angular Momentum**: Angular momentum of a 'Signal' around a 'Reference' centroid.
-- **Angular Entropy (Symmetry)**: Uniformity of a 'Signal' around a 'Reference' centroid.
-- **Spatial Correlation**: Pearson correlation between two channels within a mask.
+- **Colocalisation**: Fraction of a Signal channel's intensity within a Mask channel.
+- **Containment**: Fraction of Signal inside the core of a Container (excluding its shell).
+- **Relative Skewness**: Radial skewness of Signal relative to a Reference centroid.
+- **Angular Momentum**: Angular momentum of Signal around a Reference centroid.
+- **Angular Entropy (Symmetry)**: Uniformity of Signal distribution around a Reference centroid.
+- **Spatial Correlation**: Pearson correlation between two channels within a mask region.
+- *Note: Multi-channel dialogs include an option to disable Signal-to-Noise Ratio (SNR) checks for low-signal analyses.*
 
-## Exporting Parameters
-- **Export to FCS**: Creates a new .fcs file, adding the calculated feature as a new parameter. Requires a template .fcs file in the folder.
-- **Export to CSV**: Creates a .csv file containing the calculated feature value for each image.
+### Parameters & Batch Processing:
+- **Export to FCS**: Appends calculated feature parameters to standard `.fcs` files (requires a reference template `.fcs`).
+- **Export to CSV**: Generates a `.csv` containing calculated parameters for all images in a target folder.
+- **Batch Process Folder**: Runs the current pipeline across an entire directory of `.tiff` files.
+- **Concatenate CSVs**: Merges multiple parameter `.csv` output files across folders into a consolidated dataset.
+- **Merge CSV into FCS**: Injects parameter columns from a `.csv` directly into existing `.fcs` files.
+- **Export Terminal**: Saves the full log of terminal execution and operations history to text.
 
+---
 
 ## Using FlowFI: The Refine Tab
-This tab is used to analyze a standard flow cytometry .fcs or .csv file to determine the importance of its features.
+
+The Refine Tab evaluates standard flow cytometry `.fcs` or `.csv` files to rank feature importance.
 
 ![refine_tab](https://github.com/jameswilsenach/FlowFI/blob/main/refine.png?raw=true)
 
 ### How to Use:
-- Enter the data file path manually or click Browse to select a file.  
-- Use the checkboxes at the top to include or exclude broad categories of features from the analysis.  
-- Click Execute to start the analysis. The process involves bootstrapping and may take some time, with progress shown in the progress bar.  
-- Results will be displayed in the main panel, ranked by importance by default.
+1. Enter the data file path or click **Browse** to select an `.fcs` or `.csv` file.
+2. Select category checkboxes at the top to include or exclude specific channel types from analysis.
+3. Click **Execute** to calculate feature importance scores (uses bootstrapping, progress shown in progress bar).
+4. View ranked results in the main interactive table and bar chart.
 
+### Relative Importance (RI) Metrics:
+Choose the ranking metric under `Refine > RI Metric`:
+- **lsRI (Laplacian Score)**: Default spectral manifold learning metric ranking features by structure preservation.
+- **pRI (PCA-based)**: Ranks features by variance contribution via Principal Component Analysis.
+- **sRI (SOM-based)**: Ranks features using Self-Organizing Map topological representation.
+- **miRI (Mutual Information)**: Measures feature importance via mutual information score.
 
+### Preferences & Customization:
+- **Refine Preferences**: Adjust bootstrap iterations, subsample size, convergence checks, and convergence thresholds via `Refine > Preferences...`.
+- **Confidence Intervals**: Toggle calculation of confidence intervals (`Refine > Calculate Importance CIs`) with customizable alpha levels.
 
-### Interpreting the Results:
-**Feature Name:** The name of the channel from the source file.  
-**Importance Bar:** The length of the colored bar indicates the relative importance of the feature. Longer bars are more important. The bar can also display confidence intervals (see menu options).  
-**Sorting:** Use the dropdown menu to sort features by different criteria:  
-*Importance* (Default): Ranks features by their Laplacian Score.  
-*Type*: Groups features by their category (e.g., UV, V, B).  
-*Cluster*: Groups features that are algorithmically determined to be similar (the colored border indicates cluster membership).  
-*Centrality*: Ranks features by how representative they are of their assigned cluster. Central features are underlined.  
-*Change from Previous*: Compares the current run's rankings to a previously loaded CSV file.
+### Sorting & Comparison:
+- **Importance** (Default): Ranks features by chosen RI metric score.
+- **Type**: Groups features by optical/channel category.
+- **Cluster**: Groups features algorithmically into similarity clusters.
+- **Centrality**: Identifies central representative features per cluster (underlined).
+- **Change from Previous**: Compares current ranking against a reference CSV loaded via `Refine > Load Output CSV for Comparison`.
 
-### Saving and Loading Refinement Outputs for Comparison/Analysis
-**Save Output as CSV**: Saves the full results table, including raw scores, cluster memberships, and confidence intervals, to a CSV file.
+---
 
-**Load Output CSV for Comparison**: Loads a previously saved run to enable the "Sort by: Change from Previous" option.
+## Remote HPC Execution (X11 Forwarding)
 
-**Calculate Importance CIs**: Toggles the calculation and display of confidence intervals on the importance bars, providing a measure of estimate stability.
-
-FlowFI saves the analysis output in a CSV file with the following columns:
-**feature**: Name of the corresponding feature in the original file.
-
-**ri**: Relative Importance (normalized Laplacian Score from 0 to 1).
-
-**ls**: Raw Laplacian Score.
-
-**membership**: Numerical ID of the cluster this feature belongs to.
-
-**centrality**: Score from 0-1 indicating how representative the feature is of its cluster.
-
-**LowCI / UpperCI**: The lower and upper confidence interval bounds for the Relative Importance (if calculated).
-
-**comparison**: The change in rank compared to a loaded reference file (if used).
-
-## Running FlowFI on a Remote HPC (X11 Forwarding)
-
-FlowFI is a graphical application, but it can be run on a remote Linux-based High-Performance Computing (HPC) cluster while displaying the interface on your local machine. This is achieved using **X11 Forwarding** over SSH.
+FlowFI can be run on a remote Linux-based High-Performance Computing (HPC) cluster while rendering the graphical interface locally over SSH using **X11 Forwarding**.
 
 ### Prerequisites
+Ensure an X11 display server is running locally:
+- **Windows**: [VcXsrv](https://sourceforge.net/projects/vcxsrv/) or [Xming](https://sourceforge.net/projects/xming/).
+- **macOS**: [XQuartz](https://www.xquartz.org/).
+- **Linux**: Standard X server.
 
-Before connecting, you must have an X11 display server installed and running on your local machine:
-
-*   **Windows:** Install [VcXsrv](https://sourceforge.net/projects/vcxsrv/) or [Xming](https://sourceforge.net/projects/xming/). Ensure the X server is running (usually indicated by an icon in your system tray) before you connect.
-*   **macOS:** Install [XQuartz](https://www.xquartz.org/). You may need to log out and log back in after installation.
-*   **Linux:** Most desktop Linux distributions have an X server installed by default.
-
-*Note: The remote HPC cluster must also have X11 forwarding enabled by the system administrators (this is standard on most research clusters).*
-
-### Connection and Execution
-
-1. **Connect to the HPC:** Open your local terminal (or PowerShell/Command Prompt on Windows) and connect to your remote cluster using the `-Y` (Trusted X11) or `-X` (Untrusted X11) flag. `-Y` is generally recommended for complex graphical Python applications to avoid strict security policy errors.
-
-   ```bash
-   ssh -Y your_username@your_hpc_address
-   ```
-2. Load your environment: Once logged in, navigate to your project directory and activate the Python environment where FlowFI and its dependencies are installed.
-   ```bash
-   cd /path/to/FlowFI_Data source .venv/bin/activate# Or 'conda activate flowfi_env'
-   ```
-3. **Launch FlowFI:** Run the application just as you would locally. The GUI will take a moment to forward over the network and then appear on your local desktop.
+### Launch Command
 ```bash
-python `flowfi.py`
+ssh -Y your_username@your_hpc_address
+cd /path/to/FlowFI
+conda activate flowfi
+python main.py
 ```
 
-## Release Notes - v0.5.1
+---
 
+## Release Notes
+
+### Release Notes - v1.6.0
+* **Preset Pipeline Management**: Added built-in OFDM presets alongside saving, loading, and custom folder configuration for image processing pipelines.
+* **Expanded Operations & Quantification**: Introduced Image Crop, Rescale, Gaussian Blur, Mean intensity quantification, and SNR check options for multi-channel metrics.
+* **Data Integration Utilities**: Added utilities to concatenate parameter CSV files and merge calculated parameter metrics directly into FCS files.
+* **Multiple Feature Ranking Metrics**: Support for Laplacian Score (`lsRI`), PCA (`pRI`), SOM (`sRI`), and Mutual Information (`miRI`) metrics with customizable Refine preferences.
+* **UI & History Enhancements**: Implemented an Operation Undo/Redo stack, cross-platform AppData config persistence, and an interactive embedded User Guide.
+
+### Release Notes - v0.5.1
 * Fixed an issue where single channel aggregation depended on multichannel aggregation to be run first.
-* Fixed an issue with opencv causing the Windows application to enter an infinite loop.
+* Fixed an issue with OpenCV causing the Windows application to enter an infinite loop.
+
+---
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
- 
+---
+
 ## References
-[1] He, X., Cai, D., & Niyogi, P. (2005). Laplacian score for feature selection. Advances in neural information processing systems, 18.  
-[2] Traag, V. A., Waltman, L., & Van Eck, N. J. (2019). From Louvain to Leiden: guaranteeing well-connected communities. Scientific reports, 9(1), 5233.  
+
+[1] He, X., Cai, D., & Niyogi, P. (2005). Laplacian score for feature selection. Advances in Neural Information Processing Systems, 18.  
+[2] Traag, V. A., Waltman, L., & Van Eck, N. J. (2019). From Louvain to Leiden: guaranteeing well-connected communities. Scientific Reports, 9(1), 5233.  
 [3] Monti, S., Tamayo, P., Mesirov, J., & Golub, T. (2003). Consensus Clustering: A Resampling-Based Method for Class Discovery and Visualization of Gene Expression Microarray Data. Machine Learning, 52, 91–118.  
 [4] Kaufman, L., & Rousseeuw, P. J. (1990). Partitioning around medoids (Program PAM). In Finding Groups in Data: An Introduction to Cluster Analysis. John Wiley & Sons.  
 [5] Kendall, M. G. (1938). A New Measure of Rank Correlation. Biometrika, 30(1/2), 81–93.  
