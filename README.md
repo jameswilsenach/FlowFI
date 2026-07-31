@@ -150,7 +150,6 @@ python main.py
 * **Preset Pipeline Management**: Added built-in OFDM presets alongside saving, loading, and custom folder configuration for image processing pipelines.
 * **Expanded Operations & Quantification**: Introduced Image Crop, Rescale, Gaussian Blur, Mean intensity quantification, and SNR check options for multi-channel metrics.
 * **Data Integration Utilities**: Added utilities to concatenate parameter CSV files and merge calculated parameter metrics directly into FCS files.
-* **Multiple Feature Ranking Metrics**: Support for Laplacian Score (`lsRI`), PCA (`pRI`), SOM (`sRI`), and Mutual Information (`miRI`) metrics with customizable Refine preferences.
 * **UI & History Enhancements**: Implemented an Operation Undo/Redo stack, cross-platform AppData config persistence, and an interactive embedded User Guide.
 * **Duplicate Feature Handling**: Automatic detection, filtering, and metric propagation for duplicated feature columns during dataset refinement.
 
