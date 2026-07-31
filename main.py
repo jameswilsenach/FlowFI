@@ -16,6 +16,8 @@ import traceback
 import ctypes
 
 FLOWFI_VERSION = "1.6.0"
+MINUNIQUECOLUMNS = 3
+VARIANCETHRESHOLD = 1e-8
 
 # Tell Windows this is a unique application, not just a generic Python script
 if sys.platform == "win32":
@@ -118,6 +120,9 @@ def save_flowfi_config(config_dict):
 if __name__ == '__main__':
     # Initialize app and show splash screen before heavy imports
     app = QApplication(sys.argv)
+    icon_file = resource_path('logo.ico') if os.path.exists(resource_path('logo.ico')) else resource_path('logo.png')
+    if os.path.exists(icon_file):
+        app.setWindowIcon(QIcon(icon_file))
     splash = None
     splash_path = resource_path('flowfi_logo_white.png')
     if os.path.exists(splash_path):
@@ -2015,7 +2020,7 @@ class MainWindow(QMainWindow):
             print(f"Error creating default OFDM preset JSON: {e}")
 
     def ensure_presets_dir_exists(self, presets_dir=None):
-        """Ensures the presets directory exists, creating the default OFDM Preset JSON if missing.
+        """Ensures the presets directory exists and is writable, creating the default OFDM Preset JSON if missing.
         If the directory is not accessible and cannot be created, prompts the user to select one."""
         if presets_dir is None:
             presets_dir = self.get_presets_dir()
@@ -2028,7 +2033,8 @@ class MainWindow(QMainWindow):
             test_file = os.path.join(presets_dir, '.writable_test')
             with open(test_file, 'w') as f:
                 f.write('test')
-            os.remove(test_file)
+            if os.path.exists(test_file):
+                os.remove(test_file)
             dir_accessible = True
         except Exception:
             dir_accessible = False
@@ -2037,6 +2043,11 @@ class MainWindow(QMainWindow):
             try:
                 fallback_dir = os.path.join(get_user_data_dir(), 'Presets')
                 os.makedirs(fallback_dir, exist_ok=True)
+                test_file = os.path.join(fallback_dir, '.writable_test')
+                with open(test_file, 'w') as f:
+                    f.write('test')
+                if os.path.exists(test_file):
+                    os.remove(test_file)
                 presets_dir = fallback_dir
                 dir_accessible = True
             except Exception:
@@ -2056,33 +2067,40 @@ class MainWindow(QMainWindow):
                     dir_accessible = True
 
         if dir_accessible and os.path.exists(presets_dir):
+            self.session_presets_dir = presets_dir
             # Copy bundled default presets if in frozen/PyInstaller mode and bundled presets exist
             bundled_presets = resource_path('Presets')
             if getattr(sys, 'frozen', False) and os.path.exists(bundled_presets) and os.path.abspath(bundled_presets) != os.path.abspath(presets_dir):
-                for fname in os.listdir(bundled_presets):
-                    if fname.lower().endswith('.json'):
-                        src_path = os.path.join(bundled_presets, fname)
-                        dst_path = os.path.join(presets_dir, fname)
-                        if not os.path.exists(dst_path):
-                            import shutil
-                            shutil.copy2(src_path, dst_path)
+                try:
+                    for fname in os.listdir(bundled_presets):
+                        if fname.lower().endswith('.json'):
+                            src_path = os.path.join(bundled_presets, fname)
+                            dst_path = os.path.join(presets_dir, fname)
+                            if not os.path.exists(dst_path):
+                                import shutil
+                                shutil.copy2(src_path, dst_path)
+                except Exception as e:
+                    print(f"Warning copying bundled presets: {e}")
 
             # Check if any existing JSON file in presets_dir is already an OFDM preset
             ofdm_exists = False
-            for fname in os.listdir(presets_dir):
-                if fname.lower().endswith('.json'):
-                    fpath = os.path.join(presets_dir, fname)
-                    if fname.lower() in ('ofdm preset.json', 'ofdm_preset.json', 'ofdm.json'):
-                        ofdm_exists = True
-                        break
-                    try:
-                        with open(fpath, 'r', encoding='utf-8') as f:
-                            d = json.load(f)
-                            if isinstance(d, dict) and d.get('name', '').lower().strip() in ('ofdm preset', 'ofdm'):
-                                ofdm_exists = True
-                                break
-                    except Exception:
-                        pass
+            try:
+                for fname in os.listdir(presets_dir):
+                    if fname.lower().endswith('.json'):
+                        fpath = os.path.join(presets_dir, fname)
+                        if fname.lower() in ('ofdm preset.json', 'ofdm_preset.json', 'ofdm.json'):
+                            ofdm_exists = True
+                            break
+                        try:
+                            with open(fpath, 'r', encoding='utf-8') as f:
+                                d = json.load(f)
+                                if isinstance(d, dict) and d.get('name', '').lower().strip() in ('ofdm preset', 'ofdm'):
+                                    ofdm_exists = True
+                                    break
+                        except Exception:
+                            pass
+            except Exception as e:
+                print(f"Warning listing presets directory: {e}")
 
             if not ofdm_exists:
                 ofdm_json_path = os.path.join(presets_dir, 'OFDM_Preset.json')
@@ -3982,22 +4000,31 @@ class MainWindow(QMainWindow):
                 f"Statistical metrics, feature importance rankings, and confidence intervals may have higher variance on small sample sizes."
             )
 
+        # Report excluded non-numeric/metadata columns if any
+        if hasattr(self, 'non_numeric_cols') and self.non_numeric_cols:
+            self.terminal.add_operation(f"Excluded {len(self.non_numeric_cols)} non-numeric/metadata column(s): {', '.join(self.non_numeric_cols)}.")
+
+        num_analyzed = int(np.sum(self.is_analyzed))
         num_variable = int(np.sum(self.is_variable))
         num_constant = len(self.is_variable) - num_variable
+        num_duplicate = int(np.sum(self.is_duplicate))
 
-        if num_variable < 3:
+        if num_analyzed < MINUNIQUECOLUMNS:
             QMessageBox.warning(
                 self,
-                "Too Many Constant Parameters",
-                f"Analysis requires at least 3 variable parameters, but found only {num_variable} variable parameter(s) "
-                f"({num_constant} parameter(s) are constant/non-variable).\n\n"
-                f"FlowFI algorithms require at least 3 variable parameters. "
-                f"Please select additional feature categories or load data with more variable parameters."
+                "Too Few Unique/Variable Parameters",
+                f"Analysis requires at least {MINUNIQUECOLUMNS} unique variable parameters, but found only {num_analyzed} unique variable parameter(s) "
+                f"({num_constant} zero-variance/constant parameter(s), {num_duplicate} duplicate parameter(s)).\n\n"
+                f"Please select additional feature categories or load data with more unique variable parameters."
             )
             return
 
         if num_constant > 0:
-            self.terminal.add_operation(f"Identified {num_constant} constant/non-variable parameter(s). Rated as 0 Relative Importance (RI).")
+            self.terminal.add_operation(f"Identified {num_constant} constant/zero-variance parameter(s). Rated as 0 Relative Importance (RI).")
+
+        if num_duplicate > 0:
+            dup_cols = [self.columns[j] for j in np.where(self.is_duplicate)[0]]
+            self.terminal.add_operation(f"Identified {num_duplicate} duplicate parameter(s) ({', '.join(dup_cols)}). Excluded from calculations; properties will be propagated from primary features.")
         
         self.execute_button.setEnabled(False)
         self.start_time = time.time()
@@ -4020,16 +4047,16 @@ class MainWindow(QMainWindow):
             
         self.is_cost = metric_name == "lsRI"
 
-        self.variable_data = self.data[:, self.is_variable]
+        self.variable_data = self.data[:, self.is_analyzed]
 
         self.worker = WorkerThread(self.variable_data, boots=self.boots_param, bootsize=self.bootsize_param, 
                                    conv_check=self.convergence_check, conv_threshold=self.convergence_threshold,
                                    metric_name=metric_name)
         self.boots = self.worker.boots
-        self.feature_averages = np.zeros((num_variable, self.boots))
+        self.feature_averages = np.zeros((num_analyzed, self.boots))
         self.calculated = np.zeros((self.boots))
-        self.medoids = np.zeros((num_variable, self.boots))
-        self.memberships = np.zeros((num_variable, self.boots))
+        self.medoids = np.zeros((num_analyzed, self.boots))
+        self.memberships = np.zeros((num_analyzed, self.boots))
         self.finalcluster = False
 
         self.worker.intermediate_result.connect(self.add_result)
@@ -4043,13 +4070,15 @@ class MainWindow(QMainWindow):
         try:
             if self.filepath.lower().endswith('.csv'):
                 df = pd.read_csv(self.filepath)
+                orig_cols = list(df.columns)
                 id_cols = [col for col in df.columns if str(col).lower() in ['sample_id', 'sample_ids', 'sample', 'id', 'filename', 'index', 'unnamed: 0']]
-                if id_cols:
-                    df = df.drop(columns=id_cols)
-                df = df.select_dtypes(include=[np.number])
-                self.columns = np.array(df.columns)
-                self.data = df.values
+                df_no_id = df.drop(columns=id_cols) if id_cols else df
+                df_num = df_no_id.select_dtypes(include=[np.number])
+                self.non_numeric_cols = [col for col in orig_cols if col not in df_num.columns]
+                self.columns = np.array(df_num.columns)
+                self.data = df_num.values
             else:
+                self.non_numeric_cols = []
                 fcdata = flowio.FlowData(self.filepath)
                 self.columns = np.array([fcdata.channels[c]['PnN'] for c in fcdata.channels])
                 self.data = np.reshape(fcdata.events,[-1,fcdata.channel_count])
@@ -4102,8 +4131,28 @@ class MainWindow(QMainWindow):
         self.flabels = self.flabels[self.filter]
         self.fcolors = self.fcolors[self.filter]
 
-        # Determine non-variable parameters strictly by variance
-        self.is_variable = np.var(self.data, axis=0) > 1e-8
+        # Determine non-variable parameters strictly by variance (Precedence 1: Zero-Variance)
+        self.is_variable = np.var(self.data, axis=0) > VARIANCETHRESHOLD
+
+        # Determine duplicate parameters strictly among variable parameters (Precedence 2: Duplicates)
+        total_num = len(self.columns)
+        self.is_duplicate = np.zeros(total_num, dtype=bool)
+        self.duplicate_of = {}
+        self.duplicate_parent_indices = np.arange(total_num)
+
+        var_indices = np.where(self.is_variable)[0]
+        for idx_j, j in enumerate(var_indices):
+            col_j = self.data[:, j]
+            for i in var_indices[:idx_j]:
+                if not self.is_duplicate[i]:
+                    col_i = self.data[:, i]
+                    if np.array_equal(col_j, col_i) or np.allclose(col_j, col_i, rtol=1e-5, atol=VARIANCETHRESHOLD):
+                        self.is_duplicate[j] = True
+                        self.duplicate_of[j] = i
+                        self.duplicate_parent_indices[j] = i
+                        break
+
+        self.is_analyzed = self.is_variable & (~self.is_duplicate)
 
         if norm:
             if np.any(self.is_variable):
@@ -4121,30 +4170,38 @@ class MainWindow(QMainWindow):
         var_mdds = np.sum(self.medoids[:, non0], axis=1).flatten()
 
         total_num = len(self.is_variable)
-        var_indices = np.where(self.is_variable)[0]
+        analyzed_indices = np.where(self.is_analyzed)[0]
         const_indices = np.where(~self.is_variable)[0]
+        dup_indices = np.where(self.is_duplicate)[0]
 
         full_raw_score = np.zeros(total_num)
-        full_raw_score[var_indices] = var_mean_value
-        if len(const_indices) > 0 and len(var_indices) > 0:
+        full_raw_score[analyzed_indices] = var_mean_value
+        if len(const_indices) > 0 and len(analyzed_indices) > 0:
             if getattr(self, 'is_cost', True):
                 full_raw_score[const_indices] = np.max(var_mean_value)
             else:
                 full_raw_score[const_indices] = np.min(var_mean_value)
 
         full_mdds = np.zeros(total_num)
-        full_mdds[var_indices] = var_mdds
+        full_mdds[analyzed_indices] = var_mdds
 
         full_membership = np.zeros(total_num, dtype=int)
-        full_membership[var_indices] = result['membership']
+        full_membership[analyzed_indices] = result['membership']
 
         full_ri = np.zeros(total_num)
-        if len(var_indices) > 0:
+        if len(analyzed_indices) > 0:
             if getattr(self, 'is_cost', True):
-                full_ri[var_indices] = 1 - self.NormalizeData(var_mean_value)
+                full_ri[analyzed_indices] = 1 - self.NormalizeData(var_mean_value)
             else:
-                full_ri[var_indices] = self.NormalizeData(var_mean_value)
+                full_ri[analyzed_indices] = self.NormalizeData(var_mean_value)
         full_ri[const_indices] = 0.0
+
+        if len(dup_indices) > 0:
+            parent_indices = self.duplicate_parent_indices[dup_indices]
+            full_raw_score[dup_indices] = full_raw_score[parent_indices]
+            full_mdds[dup_indices] = full_mdds[parent_indices]
+            full_membership[dup_indices] = full_membership[parent_indices]
+            full_ri[dup_indices] = full_ri[parent_indices]
 
         self.result = {
             'raw_score': full_raw_score,
@@ -4293,7 +4350,11 @@ class MainWindow(QMainWindow):
         var_membership = self.worker.getclust(self.memberships)
         total_num = len(self.is_variable)
         self.membership = np.zeros(total_num, dtype=int)
-        self.membership[self.is_variable] = var_membership
+        self.membership[self.is_analyzed] = var_membership
+        dup_indices = np.where(self.is_duplicate)[0]
+        if len(dup_indices) > 0:
+            parent_indices = self.duplicate_parent_indices[dup_indices]
+            self.membership[dup_indices] = self.membership[parent_indices]
         self.finalcluster = True
         if EVAL == True:
             self.end_time = time.time()
@@ -4310,38 +4371,55 @@ class MainWindow(QMainWindow):
         self.consensusclustering_final()
 
         total_num = len(self.is_variable)
-        var_indices = np.where(self.is_variable)[0]
+        analyzed_indices = np.where(self.is_analyzed)[0]
         const_indices = np.where(~self.is_variable)[0]
+        dup_indices = np.where(self.is_duplicate)[0]
 
         full_ri = np.zeros(total_num)
-        if len(var_indices) > 0:
-            var_raw = self.result['raw_score'][var_indices]
+        if len(analyzed_indices) > 0:
+            analyzed_raw = self.result['raw_score'][analyzed_indices]
             if getattr(self, 'is_cost', True):
-                full_ri[var_indices] = 1 - self.NormalizeData(var_raw)
+                full_ri[analyzed_indices] = 1 - self.NormalizeData(analyzed_raw)
             else:
-                full_ri[var_indices] = self.NormalizeData(var_raw)
+                full_ri[analyzed_indices] = self.NormalizeData(analyzed_raw)
         full_ri[const_indices] = 0.0
+        if len(dup_indices) > 0:
+            parent_indices = self.duplicate_parent_indices[dup_indices]
+            full_ri[dup_indices] = full_ri[parent_indices]
         self.result['Relative Importance'] = full_ri
 
         self.update_display()
         self.calculate_cis()
 
         full_centrality = np.zeros(total_num)
-        if len(var_indices) > 0:
-            full_centrality[var_indices] = self.NormalizeData(self.result['medoids'][var_indices])
+        if len(analyzed_indices) > 0:
+            full_centrality[analyzed_indices] = self.NormalizeData(self.result['medoids'][analyzed_indices])
         full_centrality[const_indices] = 0.0
+        if len(dup_indices) > 0:
+            parent_indices = self.duplicate_parent_indices[dup_indices]
+            full_centrality[dup_indices] = full_centrality[parent_indices]
 
         self.result['Centrality'] = full_centrality
         self.result['Membership'] = self.membership
+
+        num_analyzed = len(analyzed_indices)
+        num_dup = len(dup_indices)
+        num_const = len(const_indices)
+        if self.worker.early:
+            self.terminal.add_operation(f"Analysis converged early at iteration {int(np.sum(self.calculated))}/{self.boots} for {num_analyzed} unique feature(s) ({num_const} zero-variance, {num_dup} duplicate features propagated).")
+        else:
+            self.terminal.add_operation(f"Analysis complete ({self.boots} iterations) for {num_analyzed} unique feature(s) ({num_const} zero-variance, {num_dup} duplicate features propagated).")
+
         QMessageBox.information(self, "Information", "Processing complete!")
         self.update_timer.stop()  # Stop the update timer
     def calculate_cis(self):
         if self.calc_ci_action.isChecked() and hasattr(self, 'result') and hasattr(self, 'feature_averages'):
             total_num = len(self.is_variable)
-            var_indices = np.where(self.is_variable)[0]
+            analyzed_indices = np.where(self.is_analyzed)[0]
             const_indices = np.where(~self.is_variable)[0]
+            dup_indices = np.where(self.is_duplicate)[0]
 
-            var_raw_mean = self.result['raw_score'][var_indices]
+            var_raw_mean = self.result['raw_score'][analyzed_indices]
             s = self.feature_averages.shape[1]
             numf = self.feature_averages.shape[0]
 
@@ -4379,10 +4457,15 @@ class MainWindow(QMainWindow):
 
                 full_lcis = np.zeros(total_num)
                 full_ucis = np.zeros(total_num)
-                full_lcis[var_indices] = lcis
-                full_ucis[var_indices] = ucis
+                full_lcis[analyzed_indices] = lcis
+                full_ucis[analyzed_indices] = ucis
                 full_lcis[const_indices] = 0.0
                 full_ucis[const_indices] = 0.0
+
+                if len(dup_indices) > 0:
+                    parent_indices = self.duplicate_parent_indices[dup_indices]
+                    full_lcis[dup_indices] = full_lcis[parent_indices]
+                    full_ucis[dup_indices] = full_ucis[parent_indices]
 
                 self.result['LowCI'] = full_lcis
                 self.result['UpperCI'] = full_ucis
