@@ -114,13 +114,19 @@ Choose the ranking metric under `Refine > RI Metric`:
 ### Preferences & Customization:
 - **Refine Preferences**: Adjust bootstrap iterations, subsample size, convergence checks, and convergence thresholds via `Refine > Preferences...`.
 - **Confidence Intervals**: Toggle calculation of confidence intervals (`Refine > Calculate Importance CIs`) with customizable alpha levels.
+- **Small Sample Adaptation**: Automatically adapts bootstrap sub-sampling parameters when working with small cell populations or low-event files to ensure statistical stability.
+- **Automatic Feature Filtering & Propagation**: Identifies zero-variance (constant) features and duplicate measurement columns. Duplicate features are filtered out during computationally intensive manifold calculations, and their computed importance metrics, centrality, and confidence intervals are automatically propagated back to the final output table and exported CSVs.
 
-### Sorting & Comparison:
+### Sorting, Export & Comparison:
 - **Importance** (Default): Ranks features by chosen RI metric score.
 - **Type**: Groups features by optical/channel category.
 - **Cluster**: Groups features algorithmically into similarity clusters.
 - **Centrality**: Identifies central representative features per cluster (underlined).
 - **Change from Previous**: Compares current ranking against a reference CSV loaded via `Refine > Load Output CSV for Comparison`.
+- **Export Table & Charts**: Save output feature ranking tables to CSV and export high-resolution bar charts and cluster visualizations in image formats.
+
+### Built-in Help & User Guide:
+- Access the interactive, offline-capable documentation and step-by-step feature guides directly inside the application via `Help > User Guide`.
 
 ---
 
