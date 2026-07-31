@@ -1014,6 +1014,12 @@ class HelpDialog(QDialog):
             <li><b>Load Output CSV for Comparison:</b> Loads a previously saved run to enable the "Sort by: Change from Previous" comparison option.</li>
             <li><b>Preferences...:</b> Configures bootstrap iterations (BOOT), sample size (BOOTSIZE), dataset size (N), and convergence parameters.</li>
         </ul>
+
+        <h3>Automated Processing Features:</h3>
+        <ul>
+            <li><b>Duplicate & Constant Feature Propagation:</b> Identifies zero-variance (constant) features and identical duplicate measurement columns. Duplicate features are filtered out during calculation, and their computed importance scores, centrality, and confidence intervals are automatically propagated back to the final output.</li>
+            <li><b>Small Sample Adaptation:</b> Automatically adjusts bootstrap sub-sampling parameters when working with small cell populations or low-event files to ensure statistical stability.</li>
+        </ul>
         """
 
     def get_design_text(self):
