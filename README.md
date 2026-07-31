@@ -147,6 +147,7 @@ python main.py
 ## Release Notes
 
 ### Release Notes - v1.6.0
+* **Version Incremented**: Version for consistency with Microsoft Store.
 * **Preset Pipeline Management**: Added built-in OFDM presets alongside saving, loading, and custom folder configuration for image processing pipelines.
 * **Expanded Operations & Quantification**: Introduced Image Crop, Rescale, Gaussian Blur, Mean intensity quantification, and SNR check options for multi-channel metrics.
 * **Data Integration Utilities**: Added utilities to concatenate parameter CSV files and merge calculated parameter metrics directly into FCS files.
