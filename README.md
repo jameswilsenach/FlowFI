@@ -152,10 +152,20 @@ python main.py
 * **Data Integration Utilities**: Added utilities to concatenate parameter CSV files and merge calculated parameter metrics directly into FCS files.
 * **Multiple Feature Ranking Metrics**: Support for Laplacian Score (`lsRI`), PCA (`pRI`), SOM (`sRI`), and Mutual Information (`miRI`) metrics with customizable Refine preferences.
 * **UI & History Enhancements**: Implemented an Operation Undo/Redo stack, cross-platform AppData config persistence, and an interactive embedded User Guide.
+* **Duplicate Feature Handling**: Automatic detection, filtering, and metric propagation for duplicated feature columns during dataset refinement.
 
 ### Release Notes - v0.5.1
 * Fixed an issue where single channel aggregation depended on multichannel aggregation to be run first.
 * Fixed an issue with OpenCV causing the Windows application to enter an infinite loop.
+
+---
+
+## Developer Guide & Feature Roadmap
+
+If you are a developer looking to get started or contribute to FlowFI, here are useful feature ideas and areas for enhancement:
+
+- **Channel-Specific Preprocessing**: Support channel-specific transformations within image pipelines (e.g., channel-specific color inversion for masking in brightfield-like channels).
+- **Custom Declaration of Feature/Parameter Types**: Support user-defined feature/parameter types (e.g., custom image parameters), expanding beyond the current reliance on BD FACSDiscover™ S8 Cell Sorter naming conventions.
 
 ---
 
